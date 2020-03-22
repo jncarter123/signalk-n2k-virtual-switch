@@ -1,5 +1,11 @@
 # signalk-n2k-virtual-switch
 
+The plugin emulates a NMEA 2000 Switch. It will respond to PGNS 127502 and Command PGN 126208. It will send the Binary Switch Bank Status PGN 127501 on a repeating basis. 
+
+Personlly I use this as an interface to display status from non-NMEA 2000 devices such as my router. I use Node-Red to SSH into the router every minute and get the state of the various WAN connections and display which connections are available and which connection is active.
+
+I'm also using it for some dummy lights for things like battery voltage. If the battery voltage is within my specified range then the switch status is on. Otherwise it is off and I know to investigate further.
+
 # Getting started
 1.) Use the SignalK Appstore to install the signalk-n2k-virtual-switch plugin.<br/>
 2.) Browse to Server => Plugin => NMEA 2000 Virtual Switch and enable it.<br/>

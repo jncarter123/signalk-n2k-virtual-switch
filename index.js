@@ -68,20 +68,45 @@ module.exports = function(app) {
     router.put("/virtualSwitch", (req, res) => {
 
       var msg = req.body
+
+      let example = 'Must include object for the 127502 PGN. ex. {"pgn":127502,"fields":{"Switch Bank Instance": X, "SwitchY": 0|1}}'
       if (typeof msg == 'undefined') {
         app.debug('invalid request: ' + data)
         res.status(400)
-        res.send('Invalid Request. Must include object for the 127502 PGN. ex. {"pgn":127502,"fields":{"Switch Bank Instance": X, "SwitchY": "Off||On"}}')
+        res.send('Invalid Request. ' + example)
         return
       }
 
-      let pgn = msg.pgn
-      let fields = msg['fields']
-      handleChange(pgn, fields)
+      try {
+        let pgn = msg.pgn
+        let fields = msg['fields']
 
-      instance = fields['Switch Bank Instance']
-      let key = Object.keys(fields).filter((key) => /Switch\d+/.test(key)).toString()
-      res.send('Instance ' + instance + ' ' + key + ' switched ' + (fields[key]? 'on' : 'off'))
+        let instance = fields['Switch Bank Instance']
+        if (instance !== pluginOptions.virtualInstance) {
+          res.status(400)
+          res.send('Invalid Request. Incorrect instance number. ' + example)
+        }
+
+        let key = Object.keys(fields).filter((key) => /Switch\d+/.test(key)).toString()
+        let switchNum = key.match(/\d+/g).map(Number)
+        if (switchNum < 1 || switchNum > 28) {
+          res.status(400)
+          res.send('Invalid Request. Incorrect Switch number. ' + example)
+        }
+
+        if (fields[key] !== 0 && fields[key] !== 1) {
+          res.status(400)
+          res.send('Invalid Request. Switch state must be a 0 or 1. ' + example)
+        }
+
+        handleChange(pgn, fields)
+
+        res.send('Instance ' + instance + ' ' + key + ' switched ' + (fields[key] ? 'on' : 'off'))
+      } catch (err) {
+        app.debug(err)
+        res.status(400)
+        res.send('Invalid Request. ' + example)
+      }
     })
   }
 
@@ -106,7 +131,6 @@ module.exports = function(app) {
   }
 
   function handleChange(pgn, fields) {
-    clearInterval(timer)
 
     let instance, switchNum, value
     switch (pgn) {
@@ -124,16 +148,25 @@ module.exports = function(app) {
         break
     }
 
+    //always update SK
     sendDelta(instance, switchNum, value)
 
-    virtualSwitch[`Indicator${switchNum}`].state = value
+    //update the virtual switch state
     virtualSwitch[`Indicator${switchNum}`].lastUpdated = Date.now()
 
-    sendState()
+    let currentState = virtualSwitch[`Indicator${switchNum}`].state
+    if (currentState !== value) {
+      //the state has changed so send an update on the NMEA network
+      clearInterval(timer)
 
-    timer = setInterval(function() {
+      virtualSwitch[`Indicator${switchNum}`].state = value
+
       sendState()
-    }, pluginOptions.sendRate * 1000)
+
+      timer = setInterval(function() {
+        sendState()
+      }, pluginOptions.sendRate * 1000)
+    }
   }
 
   function sendState() {
@@ -147,7 +180,8 @@ module.exports = function(app) {
     let keys = Object.keys(virtualSwitch)
     for (let i = 0; i < keys.length; i++) {
       let key = keys[i]
-      if (virtualSwitch[key].state != 2 && (pluginOptions.stateTTL === 0 || Date.now() - virtualSwitch[key].lastUpdated < pluginOptions.stateTTL)) {
+
+      if (virtualSwitch[key].state != 2 && (pluginOptions.stateTTL === 0 || Date.now() - virtualSwitch[key].lastUpdated <= pluginOptions.stateTTL * 1000)) {
         pgn[key] = virtualSwitch[key].state === 1 ? 'On' : 'Off'
       }
     }
@@ -155,6 +189,8 @@ module.exports = function(app) {
     if (Object.keys(pgn).length > 3) {
       app.debug('sending pgn %j', pgn)
       app.emit('nmea2000JsonOut', pgn)
+    } else {
+      app.debug('nothing to send %j', pgn)
     }
   }
 

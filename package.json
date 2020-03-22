@@ -1,0 +1,14 @@
+{
+  "name": "signalk-n2k-virtual-switch",
+  "version": "1.0.0",
+  "description": "N2K Virtual Switch for SignalK",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "signalk-node-server-plugin"
+  ],
+  "author": "Jeremy Carter",
+  "license": "ISC"
+}

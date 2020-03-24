@@ -35,22 +35,22 @@ module.exports = function(app) {
   }
 
   plugin.start = function(options) {
-    pluginOptions = options
+    vsOptions = options
     if (typeof virtualSwitch === 'object' && Object.keys(virtualSwitch).length != 28) {
       initializeSwitch()
 
       timer = setInterval(function() {
         sendState()
-      }, pluginOptions.sendRate * 1000)
+      }, vsOptions.sendRate * 1000)
     }
 
     n2kCallback = (msg) => {
       try {
         var fields = msg['fields']
 
-        if (msg.pgn == 127502 && fields['Switch Bank Instance'] == pluginOptions.virtualInstance ||
+        if (msg.pgn == 127502 && fields['Switch Bank Instance'] == vsOptions.virtualInstance ||
           (msg.pgn == 126208 && fields['Function Code'] == 'Command' &&
-            fields['PGN'] == 127501 && fields['list'][0].Value == pluginOptions.virtualInstance)) {
+            fields['PGN'] == 127501 && fields['list'][0].Value == vsOptions.virtualInstance)) {
 
           app.debug('Received a virtual switch control update.')
           app.debug('msg: ' + JSON.stringify(msg))
@@ -82,7 +82,7 @@ module.exports = function(app) {
         let fields = msg['fields']
 
         let instance = fields['Switch Bank Instance']
-        if (instance !== pluginOptions.virtualInstance) {
+        if (instance !== vsOptions.virtualInstance) {
           res.status(400)
           res.send('Invalid Request. Incorrect instance number. ' + example)
           return
@@ -131,6 +131,7 @@ module.exports = function(app) {
         "lastUpdated": Date.now()
       }
     }
+    app.setProviderStatus('Virtual Switch initialized')
   }
 
   function handleChange(pgn, fields) {
@@ -168,7 +169,7 @@ module.exports = function(app) {
 
       timer = setInterval(function() {
         sendState()
-      }, pluginOptions.sendRate * 1000)
+      }, vsOptions.sendRate * 1000)
     }
   }
 
@@ -177,14 +178,14 @@ module.exports = function(app) {
     const pgn = {
       pgn: 127501,
       dst: 255,
-      "Instance": pluginOptions.virtualInstance
+      "Instance": vsOptions.virtualInstance
     }
 
     let keys = Object.keys(virtualSwitch)
     for (let i = 0; i < keys.length; i++) {
       let key = keys[i]
 
-      if (virtualSwitch[key].state != 2 && (pluginOptions.stateTTL === 0 || Date.now() - virtualSwitch[key].lastUpdated <= pluginOptions.stateTTL * 1000)) {
+      if (virtualSwitch[key].state != 2 && (vsOptions.stateTTL === 0 || Date.now() - virtualSwitch[key].lastUpdated <= vsOptions.stateTTL * 1000)) {
         pgn[key] = virtualSwitch[key].state === 1 ? 'On' : 'Off'
       }
     }

@@ -1,6 +1,6 @@
 {
   "name": "signalk-n2k-virtual-switch",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "N2K Virtual Switch for SignalK",
   "main": "index.js",
   "keywords": [

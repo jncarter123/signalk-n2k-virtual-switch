@@ -85,6 +85,7 @@ module.exports = function(app) {
         if (instance !== pluginOptions.virtualInstance) {
           res.status(400)
           res.send('Invalid Request. Incorrect instance number. ' + example)
+          return
         }
 
         let key = Object.keys(fields).filter((key) => /Switch\d+/.test(key)).toString()
@@ -92,11 +93,13 @@ module.exports = function(app) {
         if (switchNum < 1 || switchNum > 28) {
           res.status(400)
           res.send('Invalid Request. Incorrect Switch number. ' + example)
+          return
         }
 
         if (fields[key] !== 0 && fields[key] !== 1) {
           res.status(400)
           res.send('Invalid Request. Switch state must be a 0 or 1. ' + example)
+          return
         }
 
         handleChange(pgn, fields)

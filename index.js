@@ -6,6 +6,8 @@ module.exports = function(app) {
   var plugin = {};
   var virtualSwitch = {};
   var timer;
+  let onStop = []
+  let registeredPaths = []
 
   plugin.id = PLUGIN_ID;
   plugin.name = PLUGIN_NAME;
@@ -36,6 +38,9 @@ module.exports = function(app) {
 
   plugin.start = function(options) {
     vsOptions = options
+
+    subscribeUpdates()
+
     if (typeof virtualSwitch === 'object' && Object.keys(virtualSwitch).length != 28) {
       initializeSwitch()
 
@@ -122,14 +127,18 @@ module.exports = function(app) {
     if (timer) {
       clearInterval(timer)
     }
+
+    onStop.forEach(f => f())
+    onStop = []
   }
 
   function initializeSwitch() {
-    for (let i = 0; i < numIndicators; i++) {
+    for (let i = 1; i <= numIndicators; i++) {
       virtualSwitch[`Indicator${i}`] = {
         "state": 2,
         "lastUpdated": Date.now()
       }
+      sendDelta(vsOptions.virtualInstance, i, 2)
     }
     app.setProviderStatus('Virtual Switch initialized')
   }
@@ -202,7 +211,7 @@ module.exports = function(app) {
     let delta = {
       "updates": [{
         "values": [{
-          "path": 'electrical.switches.bank.' + instance + '.' + indicator,
+          "path": `electrical.switches.bank.${instance}.${indicator}.state`,
           "value": value
         }]
       }]
@@ -211,5 +220,79 @@ module.exports = function(app) {
     app.debug(JSON.stringify(delta))
     app.handleMessage(PLUGIN_ID, delta)
   }
+
+  function subscribeUpdates() {
+    let command = {
+      context: "vessels.self",
+      subscribe: [{
+        path: `electrical.switches.bank.${vsOptions.virtualInstance}.*`,
+        period: 1000
+      }]
+    }
+
+    app.debug('subscribe %j', command)
+
+    app.subscriptionmanager.subscribe(command, onStop, subscription_error, delta => {
+      delta.updates.forEach(update => {
+        update.values.forEach(value => {
+          const path = value.path
+          const key = `${path}.${update.$source}`
+          app.debug(`Subscription Manager: ${key}`)
+          if (path.endsWith('state') && registeredPaths.indexOf(key) === -1) {
+            app.debug('register action handler for path %s source %s', path, update.$source)
+            app.registerActionHandler('vessels.self',
+              path,
+              (context, path, value, cb) => {
+                return actionHandler(context, path, update.$source, value, cb)
+              },
+              update.$source)
+            registeredPaths.push(key)
+          }
+        })
+      })
+    })
+  }
+
+  function actionHandler(context, path, dSource, value, cb) {
+    app.debug(`setting ${path} to ${value}`)
+
+    const parts = path.split('.')
+    let instance = Number(parts[3])
+    let switchNum = Number(parts[4])
+
+    let msg = {
+      "pgn": 127502,
+      "fields": {
+        "Switch Bank Instance": instance
+      }
+    }
+    msg.fields[`Switch${switchNum}`] = value
+
+    let pgn = msg.pgn
+    let fields = msg['fields']
+
+    try {
+      handleChange(pgn, fields)
+
+      cb({
+        state: 'SUCCESS'
+      })
+    } catch (err) {
+      app.error(err)
+
+      cb({
+        state: 'FAILURE'
+      })
+    }
+
+    return {
+      state: 'SUCCESS'
+    }
+  }
+
+  function subscription_error(err) {
+    app.setProviderError(err)
+  }
+
   return plugin;
 };

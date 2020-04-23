@@ -1,6 +1,6 @@
 # signalk-n2k-virtual-switch
 
-The plugin emulates a NMEA 2000 Switch. It will respond to PGNS 127502 and Command PGN 126208. It will send the Binary Switch Bank Status PGN 127501 on a repeating basis. 
+The plugin emulates a NMEA 2000 Switch. It will respond to PGNS 127502 and Command PGN 126208. It will send the Binary Switch Bank Status PGN 127501 on a repeating basis.
 
 Personlly I use this as an interface to display status from non-NMEA 2000 devices such as my router. I use Node-Red to SSH into the router every minute and get the state of the various WAN connections and display which connections are available and which connection is active.
 
@@ -16,8 +16,12 @@ The defaults should work for most situations but you can make changes as needed 
 
 ![Configuration](https://user-images.githubusercontent.com/30420708/77254310-44653400-6c2e-11ea-8ddc-1df61b83b87b.png)
 
+# SignalK PUT
+The plugin now supports the ability to send a PUT to the path of the switch. This opens up a lot of possibilities for use with WilhelmSK switch
+gauge and/or Node-RED.
+
 # API
-An API is provided for use by external systems. 
+An API is provided for use by external systems.
 
 PUT to http://{{skserver}}/plugins/signalk-n2k-virtual-switch/virtualSwitch
 

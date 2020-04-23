@@ -46,6 +46,7 @@ module.exports = function(app) {
 
       timer = setInterval(function() {
         sendState()
+        sendPeriodicDeltas()
       }, vsOptions.sendRate * 1000)
     }
 
@@ -60,7 +61,7 @@ module.exports = function(app) {
           app.debug('Received a virtual switch control update.')
           app.debug('msg: ' + JSON.stringify(msg))
 
-          handleChange(pgn, fields)
+          handleChange(msg.pgn, fields)
         }
       } catch (e) {
         console.error(e)
@@ -134,8 +135,8 @@ module.exports = function(app) {
 
   function initializeSwitch() {
     for (let i = 1; i <= numIndicators; i++) {
-      virtualSwitch[`Indicator${i}`] = {
-        "state": 2,
+      virtualSwitch[i] = {
+        "state": 0,
         "lastUpdated": Date.now()
       }
       sendDelta(vsOptions.virtualInstance, i, 2)
@@ -151,13 +152,13 @@ module.exports = function(app) {
         instance = fields['Switch Bank Instance']
         let key = Object.keys(fields).filter((key) => /Switch\d+/.test(key)).toString()
         switchNum = key.match(/\d+/g).map(Number)
-        value = fields[key]
+        value = fields[key] === 'On' || fields[key] === 1 ? 1 : 0
         break
       case 126208:
         instance = fields['list'][0].Value
         switchNum = fields['list'][1].Parameter
         switchNum--
-        value = fields['list'][1].Value
+        value = fields['list'][1].Value === 'On' || fields['list'][1].Value === 1 ? 1 : 0
         break
     }
 
@@ -165,14 +166,14 @@ module.exports = function(app) {
     sendDelta(instance, switchNum, value)
 
     //update the virtual switch state
-    virtualSwitch[`Indicator${switchNum}`].lastUpdated = Date.now()
+    virtualSwitch[switchNum].lastUpdated = Date.now()
 
-    let currentState = virtualSwitch[`Indicator${switchNum}`].state
+    let currentState = virtualSwitch[switchNum].state
     if (currentState !== value) {
       //the state has changed so send an update on the NMEA network
       clearInterval(timer)
 
-      virtualSwitch[`Indicator${switchNum}`].state = value
+      virtualSwitch[switchNum].state = value
 
       sendState()
 
@@ -195,7 +196,7 @@ module.exports = function(app) {
       let key = keys[i]
 
       if (virtualSwitch[key].state != 2 && (vsOptions.stateTTL === 0 || Date.now() - virtualSwitch[key].lastUpdated <= vsOptions.stateTTL * 1000)) {
-        pgn[key] = virtualSwitch[key].state === 1 ? 'On' : 'Off'
+        pgn[`Indicator${key}`] = virtualSwitch[key].state === 1 ? 'On' : 'Off'
       }
     }
 
@@ -237,7 +238,6 @@ module.exports = function(app) {
         update.values.forEach(value => {
           const path = value.path
           const key = `${path}.${update.$source}`
-          app.debug(`Subscription Manager: ${key}`)
           if (path.endsWith('state') && registeredPaths.indexOf(key) === -1) {
             app.debug('register action handler for path %s source %s', path, update.$source)
             app.registerActionHandler('vessels.self',
@@ -292,6 +292,23 @@ module.exports = function(app) {
 
   function subscription_error(err) {
     app.setProviderError(err)
+  }
+
+  function sendPeriodicDeltas(){
+    let keys = Object.keys(virtualSwitch)
+    let values = (keys.map(key => ({
+      "path": `electrical.switches.bank.${vsOptions.virtualInstance}.${key}.state`,
+      "value": virtualSwitch[key].state
+    })))
+
+    let delta = {
+      "updates": [{
+        "values": values
+      }]
+    }
+    app.debug(JSON.stringify(delta))
+
+    app.handleMessage(PLUGIN_ID, delta)
   }
 
   return plugin;

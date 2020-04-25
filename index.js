@@ -179,6 +179,7 @@ module.exports = function(app) {
 
       timer = setInterval(function() {
         sendState()
+        sendPeriodicDeltas()
       }, vsOptions.sendRate * 1000)
     }
   }

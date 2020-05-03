@@ -1,6 +1,9 @@
+const fs = require('fs')
+
 const PLUGIN_ID = 'signalk-n2k-virtual-switch'
 const PLUGIN_NAME = 'NMEA 2000 Virtual Switch'
 const numIndicators = 28
+const pdStateSuffix = '-powerDownState.json'
 
 module.exports = function(app) {
   var plugin = {};
@@ -8,40 +11,86 @@ module.exports = function(app) {
   var timer;
   let onStop = []
   let registeredPaths = []
+  var n2kCallback
+  var vsOptions
 
   plugin.id = PLUGIN_ID;
   plugin.name = PLUGIN_NAME;
   plugin.description = 'Emulates a NMEA 2000 Virtual Switch';
 
-  plugin.schema = {
-    type: "object",
-    properties: {
-      virtualInstance: {
-        type: 'number',
-        title: 'Instance # of the Virtual Switch',
-        default: 107
-      },
-      sendRate: {
-        type: 'number',
-        title: 'Send Rate(seconds)',
-        description: 'Switch updates will be sent periodically and on switch change.',
-        default: 15
-      },
-      stateTTL: {
-        type: 'number',
-        title: 'Time to Live(seconds)',
-        description: 'Switch state will be cached for the time to live period. A setting of 0 = unlimited.',
-        default: 60
-      }
+  function createChannelSchema(schema) {
+    let channels = {
+      type: 'object',
+      title: 'Switch Channels',
+      properties: {}
     }
+
+    for (let i = 1; i <= numIndicators; i++) {
+      let channel = {
+        type: "object",
+        title: "Channel " + i,
+        required: ['label'],
+        properties: {
+          label: {
+            type: 'string',
+            title: 'Name of Channel',
+            description: '',
+            default: i.toString()
+          },
+          defaultState: {
+            type: 'string',
+            title: 'Power Up State',
+            description: 'Default state when the plugin starts.',
+            enum: [
+              "OFF",
+              "ON",
+              "Previous"
+            ],
+            default: "OFF"
+          }
+        }
+      }
+      channels.properties[i] = channel
+    }
+
+    schema.properties["channels"] = channels
+    return schema
   }
 
-  plugin.start = function(options) {
+  plugin.schema = function() {
+    var schema = {
+      type: "object",
+      properties: {
+        virtualInstance: {
+          type: 'number',
+          title: 'Instance # of the Virtual Switch',
+          default: 107
+        },
+        sendRate: {
+          type: 'number',
+          title: 'Send Rate(seconds)',
+          description: 'Switch updates will be sent periodically and on switch change.',
+          default: 15
+        },
+        stateTTL: {
+          type: 'number',
+          title: 'Time to Live(seconds)',
+          description: 'Switch state will be cached for the time to live period. A setting of 0 = unlimited.',
+          default: 60
+        }
+      }
+    }
+
+    createChannelSchema(schema)
+    return schema
+  }
+
+  plugin.start = function(options, restartPlugin) {
     vsOptions = options
 
     subscribeUpdates()
 
-    if (typeof virtualSwitch === 'object' && Object.keys(virtualSwitch).length != 28) {
+    if (typeof virtualSwitch === 'object' && Object.keys(virtualSwitch).length != numIndicators) {
       initializeSwitch()
 
       timer = setInterval(function() {
@@ -131,15 +180,37 @@ module.exports = function(app) {
 
     onStop.forEach(f => f())
     onStop = []
+
+    saveState()
   }
 
   function initializeSwitch() {
+    app.debug("Initializing vSwitch")
+
+    let channels = vsOptions.channels
+    let pdState = getPowerDownState()
+
     for (let i = 1; i <= numIndicators; i++) {
+      let state
+      if (pdState) {
+        state = channels[i].defaultState === "Previous" ? pdState[i] : channels[i].defaultState
+      } else {
+        state = "OFF"
+      }
+
+      let label
+      if (channels) {
+        label = channels[i].label
+      } else {
+        label = i.toString()
+      }
+
       virtualSwitch[i] = {
-        "state": 0,
+        "label": label,
+        "state": state === "ON" ? 1 : 0,
         "lastUpdated": Date.now()
       }
-      sendDelta(vsOptions.virtualInstance, i, 2)
+      sendDelta(vsOptions.virtualInstance, label, 2)
     }
     app.setProviderStatus('Virtual Switch initialized')
   }
@@ -163,7 +234,8 @@ module.exports = function(app) {
     }
 
     //always update SK
-    sendDelta(instance, switchNum, value)
+    let label = vsOptions.channels[switchNum].label
+    sendDelta(instance, label, value)
 
     //update the virtual switch state
     virtualSwitch[switchNum].lastUpdated = Date.now()
@@ -259,7 +331,9 @@ module.exports = function(app) {
 
     const parts = path.split('.')
     let instance = Number(parts[3])
-    let switchNum = Number(parts[4])
+    let label = parts[4]
+    let labelPath = findPaths(vsOptions, "label", label)[0]
+    let switchNum = labelPath.split('.')[1]
 
     let msg = {
       "pgn": 127502,
@@ -295,10 +369,10 @@ module.exports = function(app) {
     app.setProviderError(err)
   }
 
-  function sendPeriodicDeltas(){
+  function sendPeriodicDeltas() {
     let keys = Object.keys(virtualSwitch)
     let values = (keys.map(key => ({
-      "path": `electrical.switches.bank.${vsOptions.virtualInstance}.${key}.state`,
+      "path": `electrical.switches.bank.${vsOptions.virtualInstance}.${vsOptions.channels[key].label}.state`,
       "value": virtualSwitch[key].state
     })))
 
@@ -310,6 +384,54 @@ module.exports = function(app) {
     app.debug(JSON.stringify(delta))
 
     app.handleMessage(PLUGIN_ID, delta)
+  }
+
+  function saveState() {
+    let pdState = {}
+    for (let i = 1; i <= numIndicators; i++) {
+      pdState[i] = virtualSwitch[i].state === 1 ? "ON" : "OFF"
+    }
+
+    let path = app.getDataDirPath() + pdStateSuffix
+
+    fs.writeFile(path, JSON.stringify(pdState, null, 2), (err) => {
+      if (err) app.error(err)
+    })
+  }
+
+  function getPowerDownState() {
+    let pdStateAsString = '{}'
+    let pdState
+    try {
+      let path = app.getDataDirPath() + pdStateSuffix
+      pdStateAsString = fs.readFileSync(path, 'utf8')
+    } catch (e) {
+      app.debug('Could not get powerDownState')
+    }
+    try {
+      pdState = JSON.parse(pdStateAsString)
+    } catch (e) {
+      app.debug('Could not parse pdState')
+    }
+    return pdState
+  }
+
+  function findPaths(obj, propName, value, prefix = '', store = []){
+    for (let key in obj) {
+      const curPath = prefix.length > 0 ? `${prefix}.${key}` : key
+      if (typeof obj[key] === 'object') {
+        if(!propName || curPath.includes(propName)){
+          store.push(curPath)
+        }
+        findPaths(obj[key], propName, value, curPath, store);
+      } else {
+        if((!propName || curPath.includes(propName))
+          && (!value || obj[key] == value)){
+          store.push(curPath)
+        }
+      }
+    }
+    return store;
   }
 
   return plugin;

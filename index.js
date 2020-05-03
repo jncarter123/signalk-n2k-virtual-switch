@@ -191,18 +191,13 @@ module.exports = function(app) {
     let pdState = getPowerDownState()
 
     for (let i = 1; i <= numIndicators; i++) {
+      let label = channels[i].label
+      
       let state
       if (pdState) {
         state = channels[i].defaultState === "Previous" ? pdState[i] : channels[i].defaultState
       } else {
-        state = "OFF"
-      }
-
-      let label
-      if (channels) {
-        label = channels[i].label
-      } else {
-        label = i.toString()
+        state = channels[i].defaultState === "Previous" ? "OFF" : channels[i].defaultState
       }
 
       virtualSwitch[i] = {

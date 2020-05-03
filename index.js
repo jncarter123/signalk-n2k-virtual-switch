@@ -194,13 +194,19 @@ module.exports = function(app) {
     let pdState = getPowerDownState()
 
     for (let i = 1; i <= numIndicators; i++) {
-      let label = channels[i].label
-
+      let label
       let state
-      if (pdState) {
-        state = channels[i].defaultState === "Previous" ? pdState[i] : channels[i].defaultState
+      if (channels) {
+        label = channels[i].label
+
+        if (pdState) {
+          state = channels[i].defaultState === "Previous" ? pdState[i] : channels[i].defaultState
+        } else {
+          state = channels[i].defaultState === "Previous" ? "OFF" : channels[i].defaultState
+        }
       } else {
-        state = channels[i].defaultState === "Previous" ? "OFF" : channels[i].defaultState
+        label = i.toString()
+        state = "OFF"
       }
 
       virtualSwitch[i] = {
@@ -232,7 +238,7 @@ module.exports = function(app) {
     }
 
     //always update SK
-    let label = vsOptions.channels[switchNum].label
+    let label = vsOptions.channels ? vsOptions.channels[switchNum].label :switchNum
     sendDelta(instance, label, value)
 
     //update the virtual switch state
@@ -247,7 +253,7 @@ module.exports = function(app) {
 
       sendState()
 
-      if (vsOptions.channels[switchNum].defaultState === 'Previous') {
+      if (vsOptions.channels && vsOptions.channels[switchNum].defaultState === 'Previous') {
         saveState()
       }
 
@@ -334,8 +340,8 @@ module.exports = function(app) {
     const parts = path.split('.')
     let instance = Number(parts[3])
     let label = parts[4]
-    let labelPath = findPaths(vsOptions, "label", label)[0]
-    let switchNum = labelPath.split('.')[1]
+    let labelPaths = findPaths(vsOptions, "label", label)
+    let switchNum = labelPaths.length > 0 ? labelPaths[0].split('.')[1] : label
 
     let msg = {
       "pgn": 127502,
@@ -374,7 +380,7 @@ module.exports = function(app) {
   function sendPeriodicDeltas() {
     let keys = Object.keys(virtualSwitch)
     let values = (keys.map(key => ({
-      "path": `electrical.switches.bank.${vsOptions.virtualInstance}.${vsOptions.channels[key].label}.state`,
+      "path": `electrical.switches.bank.${vsOptions.virtualInstance}.${vsOptions.channels ? vsOptions.channels[key].label : key}.state`,
       "value": virtualSwitch[key].state
     })))
 

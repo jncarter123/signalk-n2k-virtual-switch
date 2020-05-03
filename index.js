@@ -182,6 +182,9 @@ module.exports = function(app) {
     onStop = []
 
     saveState()
+
+    virtualSwitch = {}
+    app.debug('Plugin stopped.')
   }
 
   function initializeSwitch() {
@@ -192,7 +195,7 @@ module.exports = function(app) {
 
     for (let i = 1; i <= numIndicators; i++) {
       let label = channels[i].label
-      
+
       let state
       if (pdState) {
         state = channels[i].defaultState === "Previous" ? pdState[i] : channels[i].defaultState
@@ -243,6 +246,10 @@ module.exports = function(app) {
       virtualSwitch[switchNum].state = value
 
       sendState()
+
+      if (vsOptions.channels[switchNum].defaultState === 'Previous') {
+        saveState()
+      }
 
       timer = setInterval(function() {
         sendState()
@@ -387,21 +394,22 @@ module.exports = function(app) {
       pdState[i] = virtualSwitch[i].state === 1 ? "ON" : "OFF"
     }
 
-    let path = app.getDataDirPath() + pdStateSuffix
+    let filepath = app.getDataDirPath() + pdStateSuffix
 
-    fs.writeFile(path, JSON.stringify(pdState, null, 2), (err) => {
-      if (err) app.error(err)
+    app.debug('Writing ' + JSON.stringify(pdState) + ' to file ' + filepath)
+    fs.writeFile(filepath, JSON.stringify(pdState, null, 2), (err) => {
+      if (err) app.error('Could not write to ' + filepath + ' ERROR: ' + err)
     })
   }
 
   function getPowerDownState() {
     let pdStateAsString = '{}'
     let pdState
+    let filepath = app.getDataDirPath() + pdStateSuffix
     try {
-      let path = app.getDataDirPath() + pdStateSuffix
-      pdStateAsString = fs.readFileSync(path, 'utf8')
+      pdStateAsString = fs.readFileSync(filepath, 'utf8')
     } catch (e) {
-      app.debug('Could not get powerDownState')
+      app.debug('Could not get powerDownState from ' + filepath)
     }
     try {
       pdState = JSON.parse(pdStateAsString)
@@ -411,17 +419,17 @@ module.exports = function(app) {
     return pdState
   }
 
-  function findPaths(obj, propName, value, prefix = '', store = []){
+  function findPaths(obj, propName, value, prefix = '', store = []) {
     for (let key in obj) {
       const curPath = prefix.length > 0 ? `${prefix}.${key}` : key
       if (typeof obj[key] === 'object') {
-        if(!propName || curPath.includes(propName)){
+        if (!propName || curPath.includes(propName)) {
           store.push(curPath)
         }
         findPaths(obj[key], propName, value, curPath, store);
       } else {
-        if((!propName || curPath.includes(propName))
-          && (!value || obj[key] == value)){
+        if ((!propName || curPath.includes(propName)) &&
+          (!value || obj[key] == value)) {
           store.push(curPath)
         }
       }

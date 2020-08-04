@@ -47,6 +47,12 @@ module.exports = function(app) {
               "Previous"
             ],
             default: "OFF"
+          },
+          enableTTL: {
+            type: 'boolean',
+            title: 'Enable Time to Live',
+            description: 'Enable the TTL for this channel so that state will timeout and stop sending updates. Great for dummy indicators..',
+            default: false
           }
         }
       }
@@ -276,7 +282,8 @@ module.exports = function(app) {
     for (let i = 0; i < keys.length; i++) {
       let key = keys[i]
 
-      if (virtualSwitch[key].state != 2 && (vsOptions.stateTTL === 0 || Date.now() - virtualSwitch[key].lastUpdated <= vsOptions.stateTTL * 1000)) {
+      let notExpired = ((Date.now() - virtualSwitch[key].lastUpdated) <= (vsOptions.stateTTL * 1000)) ? true : false
+      if (vsOptions.stateTTL === 0 || !vsOptions.channels[key].enableTTL || (vsOptions.channels[key].enableTTL && notExpired)) {
         pgn[`Indicator${key}`] = virtualSwitch[key].state === 1 ? 'On' : 'Off'
       }
     }

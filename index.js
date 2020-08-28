@@ -31,6 +31,11 @@ module.exports = function(app) {
         title: "Channel " + i,
         required: ['label'],
         properties: {
+          enableChannel: {
+            type: 'boolean',
+            title: 'Enable the channel',
+            default: true
+          },
           label: {
             type: 'string',
             title: 'Name of Channel',
@@ -200,9 +205,12 @@ module.exports = function(app) {
     let pdState = getPowerDownState()
 
     for (let i = 1; i <= numIndicators; i++) {
+      let channelEnabled = true
       let label
       let state
       if (channels) {
+        channelEnabled = channels[i].hasOwnProperty('enableChannel') ? channels[i].enableChannel : true
+
         label = channels[i].label
 
         if (pdState) {
@@ -215,12 +223,14 @@ module.exports = function(app) {
         state = "OFF"
       }
 
-      virtualSwitch[i] = {
-        "label": label,
-        "state": state === "ON" ? 1 : 0,
-        "lastUpdated": Date.now()
+      if(channelEnabled){
+        virtualSwitch[i] = {
+          "label": label,
+          "state": state === "ON" ? 1 : 0,
+          "lastUpdated": Date.now()
+        }
+        sendDelta(vsOptions.virtualInstance, label, 2)
       }
-      sendDelta(vsOptions.virtualInstance, label, 2)
     }
     app.setProviderStatus('Virtual Switch initialized')
   }

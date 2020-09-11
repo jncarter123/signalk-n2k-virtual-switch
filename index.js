@@ -101,7 +101,7 @@ module.exports = function(app) {
 
     subscribeUpdates()
 
-    if (typeof virtualSwitch === 'object' && Object.keys(virtualSwitch).length != numIndicators) {
+    if (typeof virtualSwitch === 'object' && Object.keys(virtualSwitch).length < 1) {
       initializeSwitch()
 
       timer = setInterval(function() {
@@ -413,7 +413,7 @@ module.exports = function(app) {
 
   function saveState() {
     let pdState = {}
-    for (let i = 1; i <= numIndicators; i++) {
+    for (let i = 1; i <= virtualSwitch.length; i++) {
       pdState[i] = virtualSwitch[i].state === 1 ? "ON" : "OFF"
     }
 

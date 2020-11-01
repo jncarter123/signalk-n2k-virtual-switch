@@ -232,7 +232,7 @@ module.exports = function(app) {
         sendDelta(vsOptions.virtualInstance, label, 2)
       }
     }
-    app.setProviderStatus('Virtual Switch initialized')
+    app.setPluginStatus('Virtual Switch initialized')
   }
 
   function handleChange(pgn, fields) {

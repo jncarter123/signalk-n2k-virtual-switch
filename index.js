@@ -413,16 +413,19 @@ module.exports = function(app) {
 
   function saveState() {
     let pdState = {}
-    for (let i = 1; i <= virtualSwitch.length; i++) {
+    for (let i = 1; i <= Object.keys(virtualSwitch).length; i++) {
       pdState[i] = virtualSwitch[i].state === 1 ? "ON" : "OFF"
     }
 
     let filepath = app.getDataDirPath() + pdStateSuffix
 
     app.debug('Writing ' + JSON.stringify(pdState) + ' to file ' + filepath)
-    fs.writeFile(filepath, JSON.stringify(pdState, null, 2), (err) => {
-      if (err) app.error('Could not write to ' + filepath + ' ERROR: ' + err)
-    })
+
+    try {
+        fs.writeFileSync(filepath, JSON.stringify(pdState, null, 2))
+    } catch (e) {
+        app.error('Could not write to ' + filepath + ' ERROR: ' + err)
+    }
   }
 
   function getPowerDownState() {
@@ -432,12 +435,12 @@ module.exports = function(app) {
     try {
       pdStateAsString = fs.readFileSync(filepath, 'utf8')
     } catch (e) {
-      app.debug('Could not get powerDownState from ' + filepath)
+      app.debug('Could not get powerDownState from ' + filepath + ' - ' + e)
     }
     try {
       pdState = JSON.parse(pdStateAsString)
     } catch (e) {
-      app.debug('Could not parse pdState')
+      app.debug('Could not parse pdState - ' + e)
     }
     return pdState
   }

@@ -8,7 +8,7 @@ const pdStateSuffix = '-powerDownState.json'
 module.exports = function(app) {
   var plugin = {};
   var virtualSwitch = {};
-  var timer;
+  var vsTimer;
   let onStop = []
   let registeredPaths = []
   var n2kCallback
@@ -104,7 +104,7 @@ module.exports = function(app) {
     if (typeof virtualSwitch === 'object' && Object.keys(virtualSwitch).length < 1) {
       initializeSwitch()
 
-      timer = setInterval(function() {
+      vsTimer = setInterval(function() {
         sendState()
         sendPeriodicDeltas()
       }, vsOptions.sendRate * 1000)
@@ -185,8 +185,8 @@ module.exports = function(app) {
       n2kCallback = undefined
     }
 
-    if (timer) {
-      clearInterval(timer)
+    if (vsTimer) {
+      clearInterval(vsTimer)
     }
 
     onStop.forEach(f => f())
@@ -263,7 +263,7 @@ module.exports = function(app) {
     let currentState = virtualSwitch[switchNum].state
     if (currentState !== value) {
       //the state has changed so send an update on the NMEA network
-      clearInterval(timer)
+      clearInterval(vsTimer)
 
       virtualSwitch[switchNum].state = value
 
@@ -273,7 +273,7 @@ module.exports = function(app) {
         saveState()
       }
 
-      timer = setInterval(function() {
+      vsTimer = setInterval(function() {
         sendState()
         sendPeriodicDeltas()
       }, vsOptions.sendRate * 1000)
@@ -413,8 +413,11 @@ module.exports = function(app) {
 
   function saveState() {
     let pdState = {}
-    for (let i = 1; i <= Object.keys(virtualSwitch).length; i++) {
-      pdState[i] = virtualSwitch[i].state === 1 ? "ON" : "OFF"
+    
+    let keys = Object.keys(virtualSwitch)
+    for (let i = 0; i < keys.length; i++) {
+      let key = keys[i]
+      pdState[key] = virtualSwitch[key].state === 1 ? "ON" : "OFF"
     }
 
     let filepath = app.getDataDirPath() + pdStateSuffix

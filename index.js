@@ -114,7 +114,8 @@ module.exports = function(app) {
       try {
         var fields = msg['fields']
 
-        if (msg.pgn == 127502 && fields['Switch Bank Instance'] == vsOptions.virtualInstance ||
+        if (msg.pgn == 127502 &&
+                (fields['Switch Bank Instance'] == vsOptions.virtualInstance || fields['Instance'] == vsOptions.virtualInstance) ||
           (msg.pgn == 126208 && fields['Function Code'] == 'Command' &&
             fields['PGN'] == 127501 && fields['list'][0].Value == vsOptions.virtualInstance)) {
 
@@ -241,6 +242,8 @@ module.exports = function(app) {
     switch (pgn) {
       case 127502:
         instance = fields['Switch Bank Instance']
+        if(!instance)
+            instance = fields['Instance']
         let key = Object.keys(fields).filter((key) => /Switch\d+/.test(key)).toString()
         switchNum = key.match(/\d+/g).map(Number)
         value = fields[key] === 'On' || fields[key] === 1 ? 1 : 0
